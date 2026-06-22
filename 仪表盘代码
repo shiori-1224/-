@@ -1,0 +1,105 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+import io
+
+# 页面基础设置
+st.set_page_config(page_title="销售数据仪表盘", layout="wide")
+
+# 读取数据
+def get_data():
+    file_path = r"C:\Users\SHIORI\Desktop\销售数据_清洗后.xlsx"
+    df = pd.read_excel(file_path)
+    df["订单日期"] = pd.to_datetime(df["订单日期"])
+    df["年月"] = df["订单日期"].dt.strftime("%Y-%m")
+    return df
+
+df = get_data()
+
+# 侧边筛选区
+with st.sidebar:
+    st.header("筛选条件")
+    # 门店
+    shop_list = df["门店名称"].unique()
+    shop = st.multiselect("门店", shop_list, default=shop_list)
+    # 日期
+    min_d = df["订单日期"].min()
+    max_d = df["订单日期"].max()
+    s_date, e_date = st.date_input("日期范围", value=(min_d, max_d), min_value=min_d, max_value=max_d)
+    # 产品类别
+    cate_list = df["产品类别"].unique()
+    cate = st.multiselect("产品类别", cate_list, default=cate_list)
+    # 订单等级（修复变量名错误）
+    level_list = df["订单等级"].unique()
+    level = st.multiselect("订单等级", level_list, default=level_list)
+
+# 筛选数据
+filtered_df = df[
+    df["门店名称"].isin(shop)
+    & (df["订单日期"] >= pd.to_datetime(s_date))
+    & (df["订单日期"] <= pd.to_datetime(e_date))
+    & df["产品类别"].isin(cate)
+    & df["订单等级"].isin(level)
+]
+
+# 标题
+st.title("门店销售经营监控仪表盘")
+st.markdown(f"筛选区间：{s_date} ~ {e_date}，订单总数：{len(filtered_df)} 条")
+st.divider()
+
+# 四大指标
+total_sales = filtered_df["销售额"].sum()
+total_profit = filtered_df["利润额"].sum()
+total_qty = filtered_df["订单量"].sum()
+loss_count = filtered_df["is_loss"].sum()
+loss_rate = loss_count / len(filtered_df) if len(filtered_df) > 0 else 0
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("总销售额", f"{total_sales:,.0f} 元")
+c2.metric("总利润", f"{total_profit:,.0f} 元")
+c3.metric("总订单量", f"{total_qty:,}")
+c4.metric("亏损订单占比", f"{loss_rate:.1%}", f"亏损{loss_count}单")
+st.divider()
+
+# 第一行图表
+col1, col2 = st.columns(2)
+with col1:
+    month_df = filtered_df.groupby("年月")[["销售额", "利润额"]].sum().reset_index()
+    fig1 = make_subplots(specs=[[{"secondary_y": True}]])
+    fig1.add_trace(go.Bar(x=month_df["年月"], y=month_df["销售额"], name="销售额"), secondary_y=False)
+    fig1.add_trace(go.Line(x=month_df["年月"], y=month_df["利润额"], name="利润额"), secondary_y=True)
+    st.plotly_chart(fig1, use_container_width=True)
+
+with col2:
+    shop_df = filtered_df.groupby("门店名称")["销售额"].sum().sort_values(ascending=False).reset_index()
+    fig2 = px.bar(shop_df, x="销售额", y="门店名称", orientation="h")
+    st.plotly_chart(fig2, use_container_width=True)
+
+# 第二行图表
+col3, col4 = st.columns(2)
+with col3:
+    cat_df = filtered_df.groupby("产品类别")["利润额"].sum().reset_index()
+    fig3 = px.pie(cat_df, values="利润额", names="产品类别")
+    st.plotly_chart(fig3, use_container_width=True)
+
+with col4:
+    level_df = filtered_df.groupby("订单等级")["订单量"].sum().reset_index()
+    fig4 = px.bar(level_df, x="订单等级", y="订单量")
+    st.plotly_chart(fig4, use_container_width=True)
+
+st.divider()
+# 亏损明细表格
+st.subheader("亏损订单明细")
+loss_df = filtered_df[filtered_df["is_loss"] == 1]
+st.dataframe(loss_df, use_container_width=True)
+
+# 导出Excel
+buf = io.BytesIO()
+with pd.ExcelWriter(buf, engine="openpyxl") as w:
+    loss_df.to_excel(w, index=False, sheet_name="亏损数据")
+st.download_button("导出亏损订单Excel", buf, file_name="亏损订单明细.xlsx")
+
+#streamlit run 超市仪表盘.py
+#控制台运行上述代码可得
