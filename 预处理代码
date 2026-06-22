@@ -1,0 +1,43 @@
+import pandas as pd
+
+# 使用绝对路径读取 Excel 文件
+file_path = r"C:\Users\kris\Desktop\42705.xlsx"
+df_raw = pd.read_excel(file_path, sheet_name='某超市公司五店销售数据')
+
+# 查看基本信息
+print("原始数据形状:", df_raw.shape)
+print(df_raw.info())
+
+# 日期标准化
+df_raw['订单日期_parsed'] = pd.to_datetime(df_raw['订单日期'], errors='coerce')
+
+# 检查无效日期并处理（这里删除无效行）
+invalid_dates = df_raw[df_raw['订单日期_parsed'].isna()]
+if not invalid_dates.empty:
+    print(f"发现 {len(invalid_dates)} 行无效日期，将删除这些行。")
+    df_raw = df_raw.dropna(subset=['订单日期_parsed'])
+
+# 提取年份、月份、季度
+df_raw['年份'] = df_raw['订单日期_parsed'].dt.year
+df_raw['月份'] = df_raw['订单日期_parsed'].dt.month
+df_raw['季度'] = df_raw['订单日期_parsed'].dt.quarter
+df_raw['季度_文本'] = '第' + df_raw['季度'].astype(str) + '季度'
+
+# 删除原始公式列和辅助列
+df_raw = df_raw.drop(columns=['原始年份', '年月', '订单日期_parsed'], errors='ignore')
+
+# 标记负利润
+df_raw['is_loss'] = df_raw['利润额'] < 0
+loss_count = df_raw['is_loss'].sum()
+print(f"负利润订单数: {loss_count} ({loss_count/len(df_raw):.2%})")
+
+# 检查其他异常
+if (df_raw['销售额'] < 0).any():
+    print("发现销售额为负的行，请核查。")
+if (df_raw['订单量'] < 0).any():
+    print("发现订单量为负的行，请核查。")
+
+# 保存清洗后的数据
+output_path = r"C:\Users\kris\Desktop\销售数据_清洗后.xlsx"
+df_raw.to_excel(output_path, index=False)
+print(f"清洗后数据已保存至 {output_path}")
