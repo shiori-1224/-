@@ -1,0 +1,51 @@
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt  # 修复缺少plt导入
+
+# 解决中文乱码、负号显示
+plt.rcParams["font.family"] = ["SimHei"]
+plt.rcParams["axes.unicode_minus"] = False
+
+# 读取本地销售数据
+df = pd.read_excel(r"C:\Users\SHIORI\Desktop\销售数据_清洗后.xlsx")
+
+# 按产品类别聚合三大核心指标
+cat_df = df.groupby("产品类别").agg(
+    总销售额=("销售额", "sum"),
+    总利润=("利润额", "sum"),
+    总订单量=("订单量", "sum"),
+    亏损单数=("is_loss", "sum")
+).reset_index()
+
+# 聚类使用特征
+feat_cols = ["总销售额", "总利润", "总订单量"]
+X = cat_df[feat_cols]
+
+# 标准化数据（消除量纲影响）
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# K-Means聚类，分为4个品类梯队
+kmeans = KMeans(n_clusters=4, random_state=42)
+cat_df["品类聚类标签"] = kmeans.fit_predict(X_scaled)
+
+# 打印聚类分组结果
+print("===== 产品品类聚类分组结果 =====")
+print(cat_df.sort_values("品类聚类标签"))
+
+# 绘制聚类散点图
+plt.figure(figsize=(10, 6))
+scatter = plt.scatter(cat_df["总销售额"], cat_df["总利润"], c=cat_df["品类聚类标签"], cmap="Set2", s=80)
+
+# 每个品类标注名称
+for i, row in cat_df.iterrows():
+    plt.text(row["总销售额"], row["总利润"], row["产品类别"], fontsize=8)
+
+plt.xlabel("总销售额")
+plt.ylabel("总利润")
+plt.title("产品品类K-Means聚类分布图")
+plt.colorbar(scatter)
+plt.tight_layout()
+plt.show()
