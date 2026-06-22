@@ -1,0 +1,52 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from statsmodels.tsa.arima.model import ARIMA
+
+# 中文、负号正常显示
+plt.rcParams["font.family"] = ["SimHei"]
+plt.rcParams["axes.unicode_minus"] = False
+
+# 读取数据
+df = pd.read_excel(r"C:\Users\SHIORI\Desktop\销售数据_清洗后.xlsx")
+df["订单日期"] = pd.to_datetime(df["订单日期"])
+
+# 修复：M改为ME（月末聚合）
+month_sales = df.resample("ME", on="订单日期")["销售额"].sum().reset_index()
+month_sales.columns = ["date", "sales"]
+month_sales = month_sales.sort_values("date")
+
+# ARIMA模型训练
+model = ARIMA(month_sales["sales"], order=(1, 1, 1))
+result = model.fit()
+
+# 预测未来6个月
+forecast = result.get_forecast(steps=6)
+pred_mean = forecast.predicted_mean
+pred_ci = forecast.conf_int()
+
+# 生成预测日期
+last_date = month_sales["date"].iloc[-1]
+pred_dates = pd.date_range(start=last_date + pd.Timedelta(days=31), periods=6, freq="ME")
+
+# 绘图
+plt.figure(figsize=(12, 6))
+plt.plot(month_sales["date"], month_sales["sales"], label="历史真实销售额", color="#1f77b4", linewidth=2)
+plt.plot(pred_dates, pred_mean, label="未来预测销售额", color="#ff4444", linestyle="--", linewidth=2)
+plt.fill_between(pred_dates, pred_ci.iloc[:, 0], pred_ci.iloc[:, 1], color="pink", alpha=0.3)
+plt.xlabel("月份")
+plt.ylabel("销售额")
+plt.title("月度销售额ARIMA时序预测（未来6个月）")
+plt.legend()
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# 输出预测表格
+pred_out = pd.DataFrame({
+    "预测月份": pred_dates,
+    "预测销售额": pred_mean.values,
+    "预测下限": pred_ci.iloc[:, 0].values,
+    "预测上限": pred_ci.iloc[:, 1].values
+})
+print("===== 未来6个月销售额预测结果 =====")
+print(pred_out)
