@@ -1,0 +1,54 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# 解决matplotlib中文乱码、负号不显示问题
+plt.rcParams["font.family"] = ["SimHei"]
+plt.rcParams["axes.unicode_minus"] = False
+
+# 修复：补全文件后缀 .xlsx
+df = pd.read_excel(r"C:\Users\SHIORI\Desktop\销售数据_清洗后.xlsx")
+
+# 筛选全部亏损订单（is_loss=1代表利润为负）
+loss_df = df[df["is_loss"] == 1].copy()
+all_data = df.copy()
+
+print("==================== 一、各产品类别亏损统计 ====================")
+all_cat_cnt = all_data.groupby("产品类别")["订单号"].nunique()
+loss_cat_cnt = loss_df.groupby("产品类别")["订单号"].nunique()
+cat_analyse = pd.concat([all_cat_cnt, loss_cat_cnt], axis=1)
+cat_analyse.columns = ["全部订单数", "亏损订单数"]
+cat_analyse["亏损占比(%)"] = round(cat_analyse["亏损订单数"] / cat_analyse["全部订单数"] * 100, 2)
+cat_analyse = cat_analyse.sort_values("亏损占比(%)", ascending=False)
+print(cat_analyse)
+
+print("\n==================== 二、不同订单等级亏损总额 ====================")
+level_loss = loss_df.groupby("订单等级")["利润额"].sum()
+print(level_loss)
+
+print("\n==================== 三、各季度亏损总额 ====================")
+quarter_loss = loss_df.groupby("季度_文本")["利润额"].sum()
+print(quarter_loss)
+
+# 绘图1：各品类亏损总额柱状图
+plt.figure(figsize=(12, 5))
+cat_loss_sum = loss_df.groupby("产品类别")["利润额"].sum().sort_values()
+cat_loss_sum.plot(kind="bar", color="#c82423")
+plt.title("各产品类别亏损总金额（数值越小亏损越严重）")
+plt.ylabel("亏损总利润")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# 绘图2：季度亏损对比
+plt.figure(figsize=(8, 4))
+quarter_loss.plot(kind="bar", color="#ff6666")
+plt.title("各季度亏损金额")
+plt.ylabel("亏损总额")
+plt.tight_layout()
+plt.show()
+
+print("\n==================== 四、TOP20大额亏损订单明细 ====================")
+top_big_loss = loss_df.sort_values("利润额").head(20)[
+    ["门店名称", "产品类别", "订单日期", "订单量", "利润额", "销售额"]
+]
+print(top_big_loss)
